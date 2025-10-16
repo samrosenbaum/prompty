@@ -1,0 +1,70 @@
+#prompty-action-button {
+  position: absolute;
+  z-index: 2147483647;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #5a4bff 0%, #8e7bff 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(82, 56, 255, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  opacity: 0.95;
+}
+
+#prompty-action-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 32px rgba(82, 56, 255, 0.32);
+  opacity: 1;
+}
+
+#prompty-action-button:active {
+  transform: translateY(0);
+  box-shadow: 0 10px 20px rgba(82, 56, 255, 0.24);
+}
+
+#prompty-action-button.prompty-hidden {
+  display: none;
+}
+
+#prompty-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+  background: rgba(44, 47, 71, 0.95);
+  box-shadow: 0 10px 30px rgba(20, 24, 44, 0.35);
+  z-index: 2147483647;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+#prompty-toast.visible {
+  opacity: 1;
+}
+
+#prompty-toast[data-type='success'] {
+  background: rgba(46, 204, 113, 0.95);
+}
+
+#prompty-toast[data-type='error'] {
+  background: rgba(235, 87, 87, 0.95);
+}
+
+#prompty-toast[data-type='info'] {
+  background: rgba(45, 156, 219, 0.95);
+}
+
+#prompty-toast.prompty-hidden {
+  display: none;
+}
