@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Prompty",
+  "description": "Improve prompts as you type across the web, turning rough ideas into high-impact AI requests.",
+  "version": "1.0.0",
+  "action": {
+    "default_title": "Prompty"
+  },
+  "permissions": ["scripting", "activeTab"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "css": ["src/style.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
