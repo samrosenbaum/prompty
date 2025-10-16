@@ -1,13 +1,6 @@
 const PROMPTY_BUTTON_ID = 'prompty-action-button';
 const PROMPTY_TOAST_ID = 'prompty-toast';
 let currentTarget = null;
-let detachTargetListeners = null;
-
-const debugState = {
-  lastTargetRect: null,
-  lastToast: null,
-  activeTargetSelector: null,
-};
 
 const button = createPromptyButton();
 const toast = createToastElement();
@@ -22,8 +15,6 @@ function createPromptyButton() {
   btn.type = 'button';
   btn.textContent = 'Improve with Prompty';
   btn.classList.add('prompty-hidden');
-  btn.setAttribute('aria-label', 'Improve this prompt with Prompty');
-  btn.setAttribute('data-prompty', 'action');
   btn.addEventListener('mousedown', (event) => {
     // Prevent the focused element from losing focus while we work.
     event.preventDefault();
@@ -59,9 +50,6 @@ function createToastElement() {
   const el = document.createElement('div');
   el.id = PROMPTY_TOAST_ID;
   el.classList.add('prompty-hidden');
-  el.setAttribute('role', 'status');
-  el.setAttribute('aria-live', 'polite');
-  el.setAttribute('data-prompty', 'toast');
   const parent = document.body || document.documentElement;
   parent.appendChild(el);
   return el;
@@ -105,46 +93,23 @@ function setEditableContent(el, value) {
 function positionButtonFor(target) {
   if (!target) return;
   const rect = target.getBoundingClientRect();
-  const isHidden = rect.width === 0 && rect.height === 0;
-  if (isHidden) {
-    hideButton();
-    return;
-  }
-
   const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
   const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-  const topAbove = rect.top + scrollY - button.offsetHeight - 12;
-  const topBelow = rect.bottom + scrollY + 12;
-  const top = topAbove < scrollY + 8 ? Math.min(topBelow, scrollY + window.innerHeight - button.offsetHeight - 16) : topAbove;
+  const top = scrollY + rect.top - button.offsetHeight - 8;
   const left = scrollX + rect.right - button.offsetWidth;
-
   button.style.top = `${Math.max(scrollY + 8, top)}px`;
-  button.style.left = `${Math.max(scrollX + 8, left)}px`;
-
-  debugState.lastTargetRect = {
-    top: rect.top,
-    left: rect.left,
-    width: rect.width,
-    height: rect.height,
-  };
+  button.style.left = `${Math.max(8 + scrollX, left)}px`;
 }
 
 function showButton(target) {
   currentTarget = target;
   button.classList.remove('prompty-hidden');
   positionButtonFor(target);
-  attachTargetListeners(target);
-  debugState.activeTargetSelector = buildElementSelector(target);
 }
 
 function hideButton() {
   button.classList.add('prompty-hidden');
   currentTarget = null;
-  if (typeof detachTargetListeners === 'function') {
-    detachTargetListeners();
-    detachTargetListeners = null;
-  }
-  debugState.activeTargetSelector = null;
 }
 
 function showToast(message, type = 'info') {
@@ -157,65 +122,6 @@ function showToast(message, type = 'info') {
     toast.classList.remove('visible');
     toast.classList.add('prompty-hidden');
   }, 3200);
-  debugState.lastToast = { message, type, timestamp: Date.now() };
-}
-
-function attachTargetListeners(target) {
-  if (!target) return;
-  if (typeof detachTargetListeners === 'function') {
-    detachTargetListeners();
-  }
-
-  const reposition = () => {
-    window.requestAnimationFrame(() => {
-      if (currentTarget === target) {
-        positionButtonFor(target);
-      }
-    });
-  };
-
-  const inputListener = () => reposition();
-  const scrollListener = () => reposition();
-
-  target.addEventListener('input', inputListener, { passive: true });
-  target.addEventListener('keyup', inputListener, { passive: true });
-  target.addEventListener('scroll', scrollListener, { passive: true });
-
-  let resizeObserver = null;
-  if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(reposition);
-    resizeObserver.observe(target);
-  }
-
-  detachTargetListeners = () => {
-    target.removeEventListener('input', inputListener);
-    target.removeEventListener('keyup', inputListener);
-    target.removeEventListener('scroll', scrollListener);
-    if (resizeObserver) {
-      resizeObserver.disconnect();
-    }
-  };
-}
-
-function buildElementSelector(element) {
-  if (!element || !element.tagName) return null;
-  const parts = [];
-  let current = element;
-  while (current && parts.length < 4) {
-    const tag = current.tagName.toLowerCase();
-    const id = current.id ? `#${current.id}` : '';
-    const className = current.className && typeof current.className === 'string'
-      ? current.className
-          .split(/\s+/)
-          .filter(Boolean)
-          .slice(0, 2)
-          .map((c) => `.${c}`)
-          .join('')
-      : '';
-    parts.unshift(`${tag}${id}${className}`);
-    current = current.parentElement;
-  }
-  return parts.join(' > ');
 }
 
 function formatSentence(sentence) {
@@ -260,31 +166,19 @@ function classifySentences(sentences) {
     constraints: [],
     outputs: [],
     steps: [],
-    persona: [],
-    tone: [],
     other: [],
   };
   if (sentences.length > 0) {
     categories.objective = sentences[0];
   }
   const rest = sentences.slice(1);
-  const constraintRegex = /(must|should|need to|require|limit|avoid|never|do not|don't|cannot|deadline|within|only|strictly)/i;
-  const outputRegex = /(provide|return|output|deliver|format|list|summarize|write|generate|give me|produce|draft|create|respond with|include)/i;
-  const stepRegex = /(first|then|next|after|before|step|process|workflow|sequence)/i;
-  const contextRegex = /(because|so that|for (?:my|our)|i am|i'm|we are|audience|background|current|existing|using|working on|project|goal|objective|purpose|currently|situation)/i;
-  const personaRegex = /(act as|pretend to be|roleplay|take on the role|you are .*|from the perspective|as an?)/i;
-  const toneRegex = /(tone|style|voice|friendly|professional|casual|formal|concise|detailed|approachable|empathetic|persuasive|optimistic|neutral)/i;
+  const constraintRegex = /(must|should|need to|require|limit|avoid|never|do not|don't|cannot|deadline|within)/i;
+  const outputRegex = /(provide|return|output|deliver|format|list|summarize|write|generate|give me|produce|draft)/i;
+  const stepRegex = /(first|then|next|after|before|step|process)/i;
+  const contextRegex = /(because|so that|for (?:my|our)|i am|i'm|we are|audience|background|current|existing|using|working on|project|goal|objective|purpose)/i;
 
   for (const sentence of rest) {
     const lowerMatch = sentence;
-    if (personaRegex.test(lowerMatch)) {
-      categories.persona.push(sentence);
-      continue;
-    }
-    if (toneRegex.test(lowerMatch)) {
-      categories.tone.push(sentence);
-      continue;
-    }
     if (constraintRegex.test(lowerMatch)) {
       categories.constraints.push(sentence);
       continue;
@@ -322,11 +216,6 @@ function buildImprovedPrompt(rawText) {
     sections.push(formatSentence(categories.objective));
   }
 
-  if (categories.persona.length > 0) {
-    sections.push('## Role or Persona');
-    sections.push(...categories.persona.map((item) => `- ${formatSentence(item)}`));
-  }
-
   if (categories.context.length > 0) {
     sections.push('## Context');
     sections.push(...categories.context.map((item) => `- ${formatSentence(item)}`));
@@ -352,11 +241,6 @@ function buildImprovedPrompt(rawText) {
     sections.push(...categories.outputs.map((item) => `- ${formatSentence(item)}`));
   }
 
-  if (categories.tone.length > 0) {
-    sections.push('## Tone & Style');
-    sections.push(...categories.tone.map((item) => `- ${formatSentence(item)}`));
-  }
-
   const checklist = [];
   checklist.push('Verify any assumptions and ask clarifying questions if requirements seem ambiguous.');
   if (categories.outputs.length === 0) {
@@ -364,9 +248,6 @@ function buildImprovedPrompt(rawText) {
   }
   if (categories.constraints.length === 0) {
     checklist.push('Surface any critical constraints (timeline, tone, length) that could affect the answer.');
-  }
-  if (categories.persona.length === 0) {
-    checklist.push('Confirm whether a specific role, persona, or audience perspective is required.');
   }
   checklist.push('Provide a concise summary of how the response addresses the objective.');
 
@@ -437,5 +318,4 @@ if (typeof window !== 'undefined') {
     splitSentences,
     classifySentences,
   };
-  window.__promptyDebug = debugState;
 }

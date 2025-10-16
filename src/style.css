@@ -13,7 +13,6 @@
   transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
   font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   opacity: 0.95;
-  line-height: 1.2;
 }
 
 #prompty-action-button:hover {
@@ -25,12 +24,6 @@
 #prompty-action-button:active {
   transform: translateY(0);
   box-shadow: 0 10px 20px rgba(82, 56, 255, 0.24);
-}
-
-#prompty-action-button:focus-visible {
-  outline: 3px solid rgba(255, 255, 255, 0.9);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(90, 75, 255, 0.35);
 }
 
 #prompty-action-button.prompty-hidden {
@@ -54,8 +47,6 @@
   pointer-events: none;
   transition: opacity 0.25s ease;
   font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  text-align: center;
-  max-width: min(420px, 90vw);
 }
 
 #prompty-toast.visible {
@@ -76,16 +67,4 @@
 
 #prompty-toast.prompty-hidden {
   display: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #prompty-action-button,
-  #prompty-toast {
-    transition: none;
-  }
-
-  #prompty-action-button:hover,
-  #prompty-action-button:active {
-    transform: none;
-  }
 }
