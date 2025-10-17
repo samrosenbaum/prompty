@@ -200,6 +200,55 @@ function classifySentences(sentences) {
   return categories;
 }
 
+function inferExpertRole(text) {
+  const lower = text.toLowerCase();
+  if (/\b(website|landing page|homepage|ui|ux|hero copy)\b/.test(lower)) {
+    return 'web designer and conversion-focused copywriter';
+  }
+  if (/\b(email|newsletter|subject line)\b/.test(lower)) {
+    return 'email marketing strategist';
+  }
+  if (/\b(article|blog|write|copy|slogan|tagline|script|story)\b/.test(lower)) {
+    return 'senior content strategist and writer';
+  }
+  if (/\b(pitch deck|presentation|slides)\b/.test(lower)) {
+    return 'presentation design specialist';
+  }
+  if (/\b(api|function|debug|code|javascript|python|typescript|sql|algorithm)\b/.test(lower)) {
+    return 'senior software engineer';
+  }
+  if (/\b(data|analysis|analytics|chart|visualization|insight)\b/.test(lower)) {
+    return 'data analyst';
+  }
+  if (/\b(marketing plan|campaign|go-to-market|brand)\b/.test(lower)) {
+    return 'marketing strategist';
+  }
+  if (/\b(research|report|summary|brief|whitepaper)\b/.test(lower)) {
+    return 'research analyst';
+  }
+  return 'multidisciplinary problem-solving assistant';
+}
+
+function polishObjective(text) {
+  if (!text) return '';
+  let trimmed = text.trim();
+  trimmed = trimmed.replace(/^please\s+/i, '');
+  trimmed = trimmed.replace(/^(can|could|would|will)\s+you\s+/i, '');
+  trimmed = trimmed.replace(/^(i\s+(?:need|want)\s+(?:you|ya)\s+to\s+)/i, '');
+  trimmed = trimmed.replace(/^(i\s+(?:need|want)\s+help\s+to\s+)/i, '');
+  trimmed = trimmed.replace(/^(help\s+me\s+to\s+)/i, '');
+  trimmed = trimmed.replace(/^make\s+/i, 'Create ');
+  if (!/[.!?)]$/.test(trimmed)) {
+    trimmed += '.';
+  }
+  return trimmed;
+}
+
+function formatBullet(sentence) {
+  const formatted = formatSentence(sentence);
+  return formatted.replace(/\.$/, '');
+}
+
 function buildImprovedPrompt(rawText) {
   const cleaned = rawText.replace(/\s+/g, ' ').trim();
   if (!cleaned) {
@@ -208,60 +257,63 @@ function buildImprovedPrompt(rawText) {
 
   const sentences = splitSentences(rawText);
   const categories = classifySentences(sentences);
+  const role = inferExpertRole(rawText);
 
-  const sections = ['# Prompty Enhanced Prompt'];
+  const sections = [];
+  sections.push(`You are an experienced ${role}. Use the structured brief below to craft a thoughtful, outcome-focused response.`);
 
   if (categories.objective) {
-    sections.push('## Objective');
-    sections.push(formatSentence(categories.objective));
+    sections.push('🎯 Primary Objective');
+    sections.push(`- ${formatBullet(polishObjective(categories.objective))}`);
   }
 
-  if (categories.context.length > 0) {
-    sections.push('## Context');
-    sections.push(...categories.context.map((item) => `- ${formatSentence(item)}`));
-  }
-
-  if (categories.other.length > 0) {
-    sections.push('## Key Details');
-    sections.push(...categories.other.map((item) => `- ${formatSentence(item)}`));
+  const contextItems = [...categories.context, ...categories.other];
+  if (contextItems.length > 0) {
+    sections.push('🧭 Important Context');
+    sections.push(...contextItems.map((item) => `- ${formatBullet(item)}`));
   }
 
   if (categories.steps.length > 0) {
-    sections.push('## Process Guidance');
-    sections.push(...categories.steps.map((item) => `- ${formatSentence(item)}`));
+    sections.push('🛠️ Recommended Approach Considerations');
+    sections.push(...categories.steps.map((item) => `- ${formatBullet(item)}`));
   }
 
-  if (categories.constraints.length > 0) {
-    sections.push('## Constraints');
-    sections.push(...categories.constraints.map((item) => `- ${formatSentence(item)}`));
+  const constraints = categories.constraints;
+  if (constraints.length > 0) {
+    sections.push('⚠️ Constraints & Guardrails');
+    sections.push(...constraints.map((item) => `- ${formatBullet(item)}`));
   }
 
-  if (categories.outputs.length > 0) {
-    sections.push('## Output Expectations');
-    sections.push(...categories.outputs.map((item) => `- ${formatSentence(item)}`));
+  const deliverables = categories.outputs.length > 0
+    ? categories.outputs.map((item) => formatBullet(item))
+    : ['Outline the deliverable you recommend and explain why it best serves the objective.'];
+  sections.push('📦 Deliverables');
+  sections.push(...deliverables.map((item) => `- ${item}`));
+
+  const checklist = [
+    'Call out any assumptions and ask for clarification before finalizing if critical details are missing.',
+    'Highlight how your solution satisfies the objective and respects the stated constraints.',
+  ];
+  if (constraints.length === 0) {
+    checklist.push('Surface relevant constraints (timeline, tone, length, tools) that should be confirmed with the user.');
+  }
+  if (categories.steps.length === 0) {
+    checklist.push('Share a brief plan or recommended next steps to accomplish the work.');
   }
 
-  const checklist = [];
-  checklist.push('Verify any assumptions and ask clarifying questions if requirements seem ambiguous.');
-  if (categories.outputs.length === 0) {
-    checklist.push('Recommend an output format that best suits the objective.');
-  }
-  if (categories.constraints.length === 0) {
-    checklist.push('Surface any critical constraints (timeline, tone, length) that could affect the answer.');
-  }
-  checklist.push('Provide a concise summary of how the response addresses the objective.');
+  sections.push('📝 Communication Checklist');
+  sections.push(...checklist.map((item) => `- ${formatBullet(item)}`));
 
-  sections.push('## Response Checklist');
-  sections.push(...checklist.map((item) => `- ${formatSentence(item)}`));
-
-  const originalBlock = rawText
-    .split('\n')
-    .map((line) => `> ${line}`)
-    .join('\n');
-
-  sections.push('---');
-  sections.push('### Original Prompt');
-  sections.push(originalBlock);
+  sections.push('✅ Response Format');
+  sections.push(
+    '- Start with a concise summary of the solution.'
+  );
+  sections.push(
+    '- Provide the deliverables in a well-structured format (headings, bullet lists, tables, or code blocks as appropriate).'
+  );
+  sections.push(
+    '- End with optional follow-up questions or suggestions to refine the outcome.'
+  );
 
   return sections.join('\n\n');
 }
