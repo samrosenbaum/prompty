@@ -259,63 +259,81 @@ function buildImprovedPrompt(rawText) {
   const categories = classifySentences(sentences);
   const role = inferExpertRole(rawText);
 
-  const sections = [];
-  sections.push(`You are an experienced ${role}. Use the structured brief below to craft a thoughtful, outcome-focused response.`);
-
-  if (categories.objective) {
-    sections.push('🎯 Primary Objective');
-    sections.push(`- ${formatBullet(polishObjective(categories.objective))}`);
-  }
+  const objective = categories.objective
+    ? formatBullet(polishObjective(categories.objective))
+    : 'Clarify the user\'s primary goal before proposing a solution.';
 
   const contextItems = [...categories.context, ...categories.other];
-  if (contextItems.length > 0) {
-    sections.push('🧭 Important Context');
-    sections.push(...contextItems.map((item) => `- ${formatBullet(item)}`));
-  }
+  const contextSection = contextItems.length
+    ? contextItems.map((item) => `- ${formatBullet(item)}`)
+    : ['- No additional context provided. Confirm audience, tools, or environment as needed.'];
 
-  if (categories.steps.length > 0) {
-    sections.push('🛠️ Recommended Approach Considerations');
-    sections.push(...categories.steps.map((item) => `- ${formatBullet(item)}`));
-  }
-
-  const constraints = categories.constraints;
-  if (constraints.length > 0) {
-    sections.push('⚠️ Constraints & Guardrails');
-    sections.push(...constraints.map((item) => `- ${formatBullet(item)}`));
-  }
+  const constraintItems = categories.constraints.length
+    ? categories.constraints.map((item) => `- ${formatBullet(item)}`)
+    : ['- Ask whether there are timeline, tone, formatting, or tooling constraints that must be respected.'];
 
   const deliverables = categories.outputs.length > 0
-    ? categories.outputs.map((item) => formatBullet(item))
-    : ['Outline the deliverable you recommend and explain why it best serves the objective.'];
-  sections.push('📦 Deliverables');
-  sections.push(...deliverables.map((item) => `- ${item}`));
+    ? categories.outputs.map((item) => `- ${formatBullet(item)}`)
+    : ['- Recommend the most useful deliverable and describe why it aligns with the mission.'];
+
+  const approachItems = categories.steps.length
+    ? categories.steps.map((item) => `- ${formatBullet(item)}`)
+    : ['- Outline a clear plan or set of steps before presenting the final deliverable.'];
 
   const checklist = [
-    'Call out any assumptions and ask for clarification before finalizing if critical details are missing.',
-    'Highlight how your solution satisfies the objective and respects the stated constraints.',
+    'Verify key assumptions and ask clarifying questions when requirements feel ambiguous or incomplete.',
+    'Explain how your response directly advances the stated mission and respects the constraints.',
   ];
-  if (constraints.length === 0) {
-    checklist.push('Surface relevant constraints (timeline, tone, length, tools) that should be confirmed with the user.');
+
+  if (constraintItems.length === 1 && constraintItems[0].includes('Ask whether')) {
+    checklist.push('Surface any critical constraints (timeline, tone, length, dependencies) that should be confirmed.');
   }
+
   if (categories.steps.length === 0) {
-    checklist.push('Share a brief plan or recommended next steps to accomplish the work.');
+    checklist.push('Share a recommended plan of attack before diving into detailed deliverables.');
   }
 
-  sections.push('📝 Communication Checklist');
+  const sections = [];
+  sections.push(`You are an experienced ${role}. Carefully study the request and craft a thorough, outcome-focused response.`);
+  sections.push('');
+  sections.push('## Mission');
+  sections.push(`- ${objective}`);
+  sections.push('');
+  sections.push('## Situational Context');
+  sections.push(...contextSection);
+  sections.push('');
+  sections.push('## Constraints & Risks to Track');
+  sections.push(...constraintItems);
+  sections.push('');
+  sections.push('## Expected Deliverables');
+  sections.push(...deliverables);
+  sections.push('');
+  sections.push('## Suggested Approach');
+  sections.push(...approachItems);
+  sections.push('');
+  sections.push('## Communication Guardrails');
   sections.push(...checklist.map((item) => `- ${formatBullet(item)}`));
+  sections.push('');
+  sections.push('## When Responding');
+  sections.push('- Start with a succinct status summary that shows you understand the mission.');
+  sections.push('- Provide the deliverables in a clear structure (headings, bullet lists, tables, or code blocks).');
+  sections.push('- Close with optional follow-up questions or suggestions to improve the outcome.');
+  sections.push('');
+  const originalLines = rawText
+    .trim()
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-  sections.push('✅ Response Format');
-  sections.push(
-    '- Start with a concise summary of the solution.'
-  );
-  sections.push(
-    '- Provide the deliverables in a well-structured format (headings, bullet lists, tables, or code blocks as appropriate).'
-  );
-  sections.push(
-    '- End with optional follow-up questions or suggestions to refine the outcome.'
-  );
+  sections.push('---');
+  sections.push('### Original Request');
+  if (originalLines.length === 0) {
+    sections.push('> (no original text captured)');
+  } else {
+    sections.push(originalLines.map((line) => `> ${line}`).join('\n'));
+  }
 
-  return sections.join('\n\n');
+  return sections.join('\n');
 }
 
 document.addEventListener(
