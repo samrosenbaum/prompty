@@ -200,6 +200,78 @@ function classifySentences(sentences) {
   return categories;
 }
 
+function analyzeClarity(rawText, sentences) {
+  const suggestions = [];
+  const seen = new Set();
+
+  const addSuggestion = (message) => {
+    if (!message || seen.has(message)) {
+      return;
+    }
+    seen.add(message);
+    suggestions.push(message);
+  };
+
+  const vagueTimeRegex = /(\bASAP\b|as soon as possible|\bsoon\b|right away|whenever|later|some time)/i;
+  const vagueTimeMatch = rawText.match(vagueTimeRegex);
+  if (vagueTimeMatch) {
+    addSuggestion(
+      `Clarify the exact timeline instead of saying "${vagueTimeMatch[0]}".`
+    );
+  }
+
+  const vagueThingRegex = /(\bthing(s)?\b|\bstuff\b|something|anything)/i;
+  const vagueThingMatch = rawText.match(vagueThingRegex);
+  if (vagueThingMatch) {
+    addSuggestion(
+      `Replace vague wording like "${vagueThingMatch[0]}" with the specific item or outcome you expect.`
+    );
+  }
+
+  const etcMatch = rawText.match(/\betc\.?\b|and so on|and more/i);
+  if (etcMatch) {
+    addSuggestion(
+      `List the remaining examples instead of using "${etcMatch[0]}" so the assistant knows what to cover.`
+    );
+  }
+
+  const indefiniteQuantityRegex = /\b(a few|a couple|several|some)\s+(?!one\b|body\b|thing\b|where\b|time\b)([a-z]+)/i;
+  const quantityMatch = rawText.match(indefiniteQuantityRegex);
+  if (quantityMatch) {
+    addSuggestion(
+      `Provide a concrete quantity instead of saying "${quantityMatch[0]}".`
+    );
+  }
+
+  const pronounActionRegex = /\b(make|fix|improve|change|update|handle|work on|polish|adjust|optimize)\s+(it|this|that|them)\b/i;
+  const pronounActionMatch = rawText.match(pronounActionRegex);
+  if (pronounActionMatch) {
+    addSuggestion(
+      `Specify what "${pronounActionMatch[2]}" refers to when asking to ${pronounActionMatch[1]} it.`
+    );
+  }
+
+  const minimalWordThreshold = 12;
+  const wordCount = rawText.trim().split(/\s+/).filter(Boolean).length;
+  if (wordCount > 0 && wordCount < minimalWordThreshold) {
+    addSuggestion('Add more context so Prompty understands the audience, purpose, and constraints.');
+  }
+
+  const sentencesNeedingSubjects = sentences.filter((sentence) => {
+    const lower = sentence.toLowerCase();
+    return /\b(it|this|that|they|them)\b/.test(lower) && !/\b(for|about|regarding)\b/.test(lower);
+  });
+  if (sentencesNeedingSubjects.length > 0) {
+    addSuggestion('Clarify who or what pronouns like "it" or "they" refer to.');
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push('Prompty did not detect unclear phrasing, but double-check that goals, audience, and constraints are explicit.');
+  }
+
+  return suggestions;
+}
+
 function inferExpertRole(text) {
   const lower = text.toLowerCase();
   if (/\b(website|landing page|homepage|ui|ux|hero copy)\b/.test(lower)) {
@@ -258,6 +330,7 @@ function buildImprovedPrompt(rawText) {
   const sentences = splitSentences(rawText);
   const categories = classifySentences(sentences);
   const role = inferExpertRole(rawText);
+  const claritySuggestions = analyzeClarity(rawText, sentences);
 
   const objective = categories.objective
     ? formatBullet(polishObjective(categories.objective))
@@ -313,6 +386,11 @@ function buildImprovedPrompt(rawText) {
   sections.push('');
   sections.push('## Communication Guardrails');
   sections.push(...checklist.map((item) => `- ${formatBullet(item)}`));
+  sections.push('');
+  sections.push('## Clarity Suggestions for the Requester');
+  sections.push(
+    ...claritySuggestions.map((item) => `- ${formatBullet(item)}`)
+  );
   sections.push('');
   sections.push('## When Responding');
   sections.push('- Start with a succinct status summary that shows you understand the mission.');
@@ -387,5 +465,6 @@ if (typeof window !== 'undefined') {
     buildImprovedPrompt,
     splitSentences,
     classifySentences,
+    analyzeClarity,
   };
 }
