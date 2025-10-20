@@ -15,6 +15,15 @@
   opacity: 0.95;
 }
 
+#prompty-action-button.prompty-draggable {
+  cursor: grab;
+}
+
+#prompty-action-button.prompty-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
 #prompty-action-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 18px 32px rgba(82, 56, 255, 0.32);
