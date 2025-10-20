@@ -359,6 +359,8 @@ function classifySentences(sentences) {
     constraints: [],
     outputs: [],
     steps: [],
+    styleTone: [],
+    format: [],
     other: [],
   };
   if (sentences.length > 0) {
@@ -367,13 +369,19 @@ function classifySentences(sentences) {
   const rest = sentences.slice(1);
   const constraintRegex = /(must|should|need to|require|limit|avoid|never|do not|don't|cannot|deadline|within)/i;
   const outputRegex = /(provide|return|output|deliver|format|list|summarize|write|generate|give me|produce|draft)/i;
+  const formatRegex = /(deliver (?:it|this) as|output as|return as|export as|provide (?:it|this) as|final (?:file|format)|presentation deck|prototype|working artifact|step-by-step guide|checklist|report)/i;
   const stepRegex = /(first|then|next|after|before|step|process)/i;
   const contextRegex = /(because|so that|for (?:my|our)|i am|i'm|we are|audience|background|current|existing|using|working on|project|goal|objective|purpose)/i;
+  const styleRegex = /(tone|style|voice|aesthetic|vibe|mood|feel|brand|should sound|should feel|look like|design like|similar to|".*" inspired|modern|minimalist|playful|professional)/i;
 
   for (const sentence of rest) {
     const lowerMatch = sentence;
     if (constraintRegex.test(lowerMatch)) {
       categories.constraints.push(sentence);
+      continue;
+    }
+    if (formatRegex.test(lowerMatch)) {
+      categories.format.push(sentence);
       continue;
     }
     if (outputRegex.test(lowerMatch)) {
@@ -382,6 +390,10 @@ function classifySentences(sentences) {
     }
     if (stepRegex.test(lowerMatch)) {
       categories.steps.push(sentence);
+      continue;
+    }
+    if (styleRegex.test(lowerMatch)) {
+      categories.styleTone.push(sentence);
       continue;
     }
     if (contextRegex.test(lowerMatch)) {
@@ -529,7 +541,7 @@ function buildImprovedPrompt(rawText) {
     ? formatBullet(polishObjective(categories.objective))
     : 'Clarify the user\'s primary goal before proposing a solution.';
 
-  const contextItems = [...categories.context, ...categories.other];
+  const contextItems = [...categories.context];
   const contextSection = contextItems.length
     ? contextItems.map((item) => `- ${formatBullet(item)}`)
     : ['- No additional context provided. Confirm audience, tools, or environment as needed.'];
@@ -540,11 +552,30 @@ function buildImprovedPrompt(rawText) {
 
   const deliverables = categories.outputs.length > 0
     ? categories.outputs.map((item) => `- ${formatBullet(item)}`)
-    : ['- Recommend the most useful deliverable and describe why it aligns with the mission.'];
+    : ['- Break the outcome into concrete deliverables so the assistant can respond with precision.'];
 
   const approachItems = categories.steps.length
     ? categories.steps.map((item) => `- ${formatBullet(item)}`)
     : ['- Outline a clear plan or set of steps before presenting the final deliverable.'];
+
+  const styleToneItems = categories.styleTone.length
+    ? categories.styleTone.map((item) => `- ${formatBullet(item)}`)
+    : ['- Define the desired tone, aesthetic, or voice so the response aligns with the brand or emotion you expect.'];
+
+  const formatItems = categories.format.length
+    ? categories.format.map((item) => `- ${formatBullet(item)}`)
+    : ['- Specify exactly how the output should be delivered (code block, table, checklist, artifact, etc.).'];
+
+  const specificGoalItems = [];
+  specificGoalItems.push(`- ${objective}`);
+  if (deliverables.length > 0) {
+    specificGoalItems.push(...deliverables);
+  }
+  if (categories.other.length > 0) {
+    specificGoalItems.push(
+      ...categories.other.map((item) => `- ${formatBullet(item)}`)
+    );
+  }
 
   const checklist = [
     'Verify key assumptions and ask clarifying questions when requirements feel ambiguous or incomplete.',
@@ -562,17 +593,22 @@ function buildImprovedPrompt(rawText) {
   const sections = [];
   sections.push(`You are an experienced ${role}. Carefully study the request and craft a thorough, outcome-focused response.`);
   sections.push('');
-  sections.push('## Mission');
-  sections.push(`- ${objective}`);
-  sections.push('');
-  sections.push('## Situational Context');
+  sections.push('## Prompt Expansion Blueprint');
+  sections.push('### 1. Role & Context');
+  sections.push(`- Expert focus: ${formatBullet(`Operate as a ${role}.`)}`);
   sections.push(...contextSection);
   sections.push('');
-  sections.push('## Constraints & Risks to Track');
+  sections.push('### 2. Specific Goals & Success Criteria');
+  sections.push(...specificGoalItems);
+  sections.push('');
+  sections.push('### 3. Constraints & Requirements');
   sections.push(...constraintItems);
   sections.push('');
-  sections.push('## Expected Deliverables');
-  sections.push(...deliverables);
+  sections.push('### 4. Style, Tone, & Aesthetic');
+  sections.push(...styleToneItems);
+  sections.push('');
+  sections.push('### 5. Output Format & Delivery');
+  sections.push(...formatItems);
   sections.push('');
   sections.push('## Suggested Approach');
   sections.push(...approachItems);
@@ -580,15 +616,54 @@ function buildImprovedPrompt(rawText) {
   sections.push('## Communication Guardrails');
   sections.push(...checklist.map((item) => `- ${formatBullet(item)}`));
   sections.push('');
-  sections.push('## Clarity Suggestions for the Requester');
+  sections.push('## Quick Checklist Before You Submit');
+  sections.push('- Is the intent and mission stated clearly and unambiguously?');
+  sections.push('- Are quantities, counts, and success metrics explicit?');
+  sections.push('- Did you describe the preferred format, tone, and style?');
+  sections.push('- Are all constraints, limitations, and tools surfaced?');
+  sections.push('- Would a teammate interpret the request exactly as you do?');
+  sections.push('- Did you reference examples or comparisons when helpful?');
+  sections.push('');
+  sections.push('## Prompt-Crafting Power Tips');
+  sections.push('- Replace vague adjectives with specific references to visuals or behavior.');
+  sections.push('- Quantify expectations wherever possible (counts, time frames, metrics).');
+  sections.push('- Provide examples or inspirations (e.g., “like Stripe’s homepage”).');
+  sections.push('- Break complex work into ordered steps so the assistant can follow along.');
+  sections.push('- Call out anything you do **not** want included in the final answer.');
+  sections.push('- Invite the assistant to share reasoning or design choices as it works.');
+  sections.push('');
+  sections.push('## Clarity Boost Suggestions for the Requester');
   sections.push(
     ...claritySuggestions.map((item) => `- ${formatBullet(item)}`)
   );
   sections.push('');
   sections.push('## When Responding');
-  sections.push('- Start with a succinct status summary that shows you understand the mission.');
+  sections.push('- Start with a succinct status summary that proves you understand the mission.');
   sections.push('- Provide the deliverables in a clear structure (headings, bullet lists, tables, or code blocks).');
   sections.push('- Close with optional follow-up questions or suggestions to improve the outcome.');
+  sections.push('');
+  sections.push('## Prompt Template You Can Reuse');
+  sections.push('```');
+  sections.push('Act as a [expertise] who specializes in [domain].');
+  sections.push('I am [your situation]. I need [general goal] because [reason].');
+  sections.push('The solution must include:');
+  sections.push('- [Feature 1 with details]');
+  sections.push('- [Feature 2 with details]');
+  sections.push('- [Feature 3 with details]');
+  sections.push('Constraints:');
+  sections.push('- Technology: [specific tools/languages]');
+  sections.push('- Limitations: [what to avoid or stay within]');
+  sections.push('- Compatibility: [platforms/browsers/devices]');
+  sections.push('Style & Tone: [specific adjectives or inspirations]');
+  sections.push('Output: Deliver as [format] with [level of detail].');
+  sections.push('```');
+  sections.push('');
+  sections.push('## How LLMs Process This Prompt');
+  sections.push('- Clear intent: spell out what success looks like.');
+  sections.push('- Constraints: list boundaries, tools, or red lines.');
+  sections.push('- Context: share background that shapes the answer.');
+  sections.push('- Structure: keep information organized by topic.');
+  sections.push('- Specificity: use concrete details instead of generalities.');
   sections.push('');
   const originalLines = rawText
     .trim()
