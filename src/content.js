@@ -1,6 +1,16 @@
 const PROMPTY_BUTTON_ID = 'prompty-action-button';
 const PROMPTY_TOAST_ID = 'prompty-toast';
+const PROMPTY_POSITION_STORAGE_KEY = 'promptyButtonPosition';
+const PROMPTY_SHORTCUT_DESCRIPTION = 'Ctrl + Alt + P';
+
 let currentTarget = null;
+let manualPosition = loadManualPosition();
+let buttonManuallyHidden = false;
+let isDraggingButton = false;
+let dragStartInfo = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+let buttonMovedDuringDrag = false;
 
 const button = createPromptyButton();
 const toast = createToastElement();
@@ -14,12 +24,29 @@ function createPromptyButton() {
   btn.id = PROMPTY_BUTTON_ID;
   btn.type = 'button';
   btn.textContent = 'Improve with Prompty';
-  btn.classList.add('prompty-hidden');
+  btn.classList.add('prompty-hidden', 'prompty-draggable');
+  btn.dataset.wasDragging = 'false';
   btn.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) {
+      return;
+    }
     // Prevent the focused element from losing focus while we work.
     event.preventDefault();
+    const rect = btn.getBoundingClientRect();
+    dragStartInfo = {
+      startX: event.clientX,
+      startY: event.clientY,
+      rectTop: rect.top,
+      rectLeft: rect.left,
+    };
+    isDraggingButton = true;
+    buttonMovedDuringDrag = false;
   });
   btn.addEventListener('click', () => {
+    if (btn.dataset.wasDragging === 'true') {
+      btn.dataset.wasDragging = 'false';
+      return;
+    }
     if (!currentTarget) {
       showToast('Prompty could not find the active editor.', 'error');
       return;
@@ -39,6 +66,9 @@ function createPromptyButton() {
   });
   const parent = document.body || document.documentElement;
   parent.appendChild(btn);
+  if (manualPosition) {
+    applyManualPosition();
+  }
   return btn;
 }
 
@@ -53,6 +83,154 @@ function createToastElement() {
   const parent = document.body || document.documentElement;
   parent.appendChild(el);
   return el;
+}
+
+function loadManualPosition() {
+  try {
+    const raw = window.localStorage.getItem(PROMPTY_POSITION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof parsed.top === 'number' &&
+      typeof parsed.left === 'number'
+    ) {
+      return {
+        top: Math.max(8, parsed.top),
+        left: Math.max(8, parsed.left),
+      };
+    }
+  } catch (error) {
+    // Ignore storage issues silently so we never break the host page.
+  }
+  return null;
+}
+
+function saveManualPosition(position) {
+  try {
+    if (!position) {
+      window.localStorage.removeItem(PROMPTY_POSITION_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(PROMPTY_POSITION_STORAGE_KEY, JSON.stringify(position));
+  } catch (error) {
+    // Ignore storage issues silently.
+  }
+}
+
+function applyManualPosition() {
+  if (!manualPosition) {
+    return false;
+  }
+  button.style.position = 'fixed';
+  button.style.top = `${manualPosition.top}px`;
+  button.style.left = `${manualPosition.left}px`;
+  button.classList.add('prompty-manual-position');
+  return true;
+}
+
+function isButtonManuallyPositioned() {
+  return Boolean(manualPosition);
+}
+
+function ensureManualPositionInView() {
+  if (!manualPosition) {
+    return;
+  }
+  const padding = 8;
+  const width = button.offsetWidth || 160;
+  const height = button.offsetHeight || 40;
+  const maxLeft = Math.max(padding, window.innerWidth - width - padding);
+  const maxTop = Math.max(padding, window.innerHeight - height - padding);
+  const nextLeft = Math.min(Math.max(padding, manualPosition.left), maxLeft);
+  const nextTop = Math.min(Math.max(padding, manualPosition.top), maxTop);
+  manualPosition = { top: nextTop, left: nextLeft };
+  if (!buttonManuallyHidden) {
+    applyManualPosition();
+  }
+  saveManualPosition(manualPosition);
+}
+
+function toggleShortcutVisibility() {
+  buttonManuallyHidden = !buttonManuallyHidden;
+  if (buttonManuallyHidden) {
+    hideButton({ keepTarget: true });
+    showToast(`Prompty button hidden. Press ${PROMPTY_SHORTCUT_DESCRIPTION} to show it again.`, 'info');
+    return;
+  }
+  const active = currentTarget || (isEditableElement(document.activeElement) ? document.activeElement : null);
+  if (active) {
+    showButton(active);
+  }
+  showToast(`Prompty button visible. Use ${PROMPTY_SHORTCUT_DESCRIPTION} to hide it.`, 'info');
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function handleButtonMouseMove(event) {
+  if (!isDraggingButton || !dragStartInfo) {
+    return;
+  }
+  event.preventDefault();
+  const deltaX = event.clientX - dragStartInfo.startX;
+  const deltaY = event.clientY - dragStartInfo.startY;
+  if (!buttonMovedDuringDrag) {
+    const dragThreshold = 3;
+    if (Math.abs(deltaX) < dragThreshold && Math.abs(deltaY) < dragThreshold) {
+      return;
+    }
+    buttonMovedDuringDrag = true;
+    button.classList.add('prompty-dragging');
+    button.classList.add('prompty-manual-position');
+    const { rectTop, rectLeft } = dragStartInfo;
+    button.style.position = 'fixed';
+    button.style.top = `${rectTop}px`;
+    button.style.left = `${rectLeft}px`;
+    dragOffsetX = dragStartInfo.startX - rectLeft;
+    dragOffsetY = dragStartInfo.startY - rectTop;
+  }
+  const padding = 8;
+  const maxLeft = Math.max(padding, window.innerWidth - button.offsetWidth - padding);
+  const maxTop = Math.max(padding, window.innerHeight - button.offsetHeight - padding);
+  const newLeft = clamp(event.clientX - dragOffsetX, padding, maxLeft);
+  const newTop = clamp(event.clientY - dragOffsetY, padding, maxTop);
+  manualPosition = { top: newTop, left: newLeft };
+  button.style.left = `${newLeft}px`;
+  button.style.top = `${newTop}px`;
+}
+
+function handleButtonMouseUp(event) {
+  if (!isDraggingButton) {
+    return;
+  }
+  if (buttonMovedDuringDrag) {
+    event.preventDefault();
+    button.dataset.wasDragging = 'true';
+    window.setTimeout(() => {
+      button.dataset.wasDragging = 'false';
+    }, 0);
+    ensureManualPositionInView();
+    saveManualPosition(manualPosition);
+  }
+  button.classList.remove('prompty-dragging');
+  isDraggingButton = false;
+  dragStartInfo = null;
+  buttonMovedDuringDrag = false;
+}
+
+function handleGlobalKeydown(event) {
+  if (event.repeat) {
+    return;
+  }
+  if (event.ctrlKey && event.altKey && !event.shiftKey && event.code === 'KeyP') {
+    event.preventDefault();
+    toggleShortcutVisibility();
+  }
 }
 
 function isEditableElement(el) {
@@ -92,24 +270,39 @@ function setEditableContent(el, value) {
 
 function positionButtonFor(target) {
   if (!target) return;
+  if (isButtonManuallyPositioned()) {
+    return;
+  }
   const rect = target.getBoundingClientRect();
   const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
   const scrollY = window.pageYOffset || document.documentElement.scrollTop;
   const top = scrollY + rect.top - button.offsetHeight - 8;
   const left = scrollX + rect.right - button.offsetWidth;
+  button.classList.remove('prompty-manual-position');
+  button.style.position = 'absolute';
   button.style.top = `${Math.max(scrollY + 8, top)}px`;
   button.style.left = `${Math.max(8 + scrollX, left)}px`;
 }
 
 function showButton(target) {
   currentTarget = target;
+  if (buttonManuallyHidden) {
+    return;
+  }
   button.classList.remove('prompty-hidden');
-  positionButtonFor(target);
+  if (isButtonManuallyPositioned()) {
+    ensureManualPositionInView();
+  } else {
+    positionButtonFor(target);
+  }
 }
 
-function hideButton() {
+function hideButton(options = {}) {
+  const { keepTarget = false } = options;
   button.classList.add('prompty-hidden');
-  currentTarget = null;
+  if (!keepTarget) {
+    currentTarget = null;
+  }
 }
 
 function showToast(message, type = 'info') {
@@ -414,6 +607,10 @@ function buildImprovedPrompt(rawText) {
   return sections.join('\n');
 }
 
+document.addEventListener('mousemove', handleButtonMouseMove, true);
+document.addEventListener('mouseup', handleButtonMouseUp, true);
+document.addEventListener('keydown', handleGlobalKeydown, true);
+
 document.addEventListener(
   'focusin',
   (event) => {
@@ -446,7 +643,7 @@ document.addEventListener(
 window.addEventListener(
   'scroll',
   () => {
-    if (currentTarget) {
+    if (currentTarget && !buttonManuallyHidden && !isButtonManuallyPositioned()) {
       positionButtonFor(currentTarget);
     }
   },
@@ -454,7 +651,11 @@ window.addEventListener(
 );
 
 window.addEventListener('resize', () => {
-  if (currentTarget) {
+  if (isButtonManuallyPositioned()) {
+    ensureManualPositionInView();
+    return;
+  }
+  if (currentTarget && !buttonManuallyHidden) {
     positionButtonFor(currentTarget);
   }
 });
