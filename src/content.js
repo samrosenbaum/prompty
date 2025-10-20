@@ -18,6 +18,11 @@ let suggestionInputListener = null;
 let suggestionUpdateTimeout = null;
 let suggestionKeyListener = null;
 
+const PROMPTY_BUTTON_TEXT = {
+  improve: 'Improve with Prompty',
+  remove: 'Remove Instructions Section',
+};
+
 const button = createPromptyButton();
 const toast = createToastElement();
 const { container: suggestionPanel, list: suggestionList } = createSuggestionPanel();
@@ -30,7 +35,8 @@ function createPromptyButton() {
   const btn = document.createElement('button');
   btn.id = PROMPTY_BUTTON_ID;
   btn.type = 'button';
-  btn.textContent = 'Improve with Prompty';
+  btn.dataset.mode = 'improve';
+  btn.textContent = getPromptyButtonLabel('improve');
   btn.classList.add('prompty-hidden', 'prompty-draggable');
   btn.dataset.wasDragging = 'false';
   btn.addEventListener('mousedown', (event) => {
@@ -58,6 +64,11 @@ function createPromptyButton() {
       showToast('Prompty could not find the active editor.', 'error');
       return;
     }
+    const mode = getPromptyButtonMode();
+    if (mode === 'remove') {
+      handleRemoveInstructions(currentTarget);
+      return;
+    }
     const original = getEditableContent(currentTarget);
     if (!original || !original.trim()) {
       showToast('Type a prompt first so Prompty knows what to improve.', 'info');
@@ -69,6 +80,7 @@ function createPromptyButton() {
       return;
     }
     setEditableContent(currentTarget, improved);
+    setPromptyButtonMode('remove');
     showToast('Prompt leveled up! Review the structured version and adjust if needed.', 'success');
   });
   const parent = document.body || document.documentElement;
@@ -77,6 +89,20 @@ function createPromptyButton() {
     applyManualPosition();
   }
   return btn;
+}
+
+function getPromptyButtonLabel(mode) {
+  return PROMPTY_BUTTON_TEXT[mode] || PROMPTY_BUTTON_TEXT.improve;
+}
+
+function getPromptyButtonMode() {
+  return button.dataset.mode || 'improve';
+}
+
+function setPromptyButtonMode(mode) {
+  const nextMode = mode === 'remove' ? 'remove' : 'improve';
+  button.dataset.mode = nextMode;
+  button.textContent = getPromptyButtonLabel(nextMode);
 }
 
 function createToastElement() {
@@ -90,6 +116,24 @@ function createToastElement() {
   const parent = document.body || document.documentElement;
   parent.appendChild(el);
   return el;
+}
+
+function handleRemoveInstructions(target) {
+  const content = getEditableContent(target);
+  if (!content) {
+    showToast('No instructions section found to remove.', 'info');
+    setPromptyButtonMode('improve');
+    return;
+  }
+  const updated = removeInstructionsSection(content);
+  if (updated === content) {
+    showToast('No instructions section found to remove.', 'info');
+    setPromptyButtonMode('improve');
+    return;
+  }
+  setEditableContent(target, updated);
+  showToast('Instructions section removed. Ready to send.', 'success');
+  setPromptyButtonMode('improve');
 }
 
 function startRealtimeSuggestions(target) {
@@ -689,6 +733,39 @@ function setEditableContent(el, value) {
   }
 }
 
+function hasInstructionsSection(text) {
+  return typeof text === 'string' && text.includes('## Actions for You (Do Not Send)');
+}
+
+function removeInstructionsSection(text) {
+  if (!text) {
+    return text;
+  }
+  const marker = '## Actions for You (Do Not Send)';
+  const startIndex = text.indexOf(marker);
+  if (startIndex === -1) {
+    return text;
+  }
+  const endIndex = text.indexOf('\n---', startIndex);
+  let before = text.slice(0, startIndex);
+  let after = endIndex === -1 ? '' : text.slice(endIndex);
+
+  if (before.endsWith('\n')) {
+    before = before.replace(/\n+$/, '\n\n');
+  }
+
+  if (after) {
+    after = after.replace(/^\s*/, '\n\n');
+  }
+
+  const combined = `${before}${after}`
+    .replace(/^\n+/, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s+$/, '');
+
+  return combined;
+}
+
 function positionButtonFor(target) {
   if (!target) return;
   if (isButtonManuallyPositioned()) {
@@ -708,6 +785,12 @@ function positionButtonFor(target) {
 function showButton(target) {
   startRealtimeSuggestions(target);
   currentTarget = target;
+  const content = getEditableContent(target);
+  if (hasInstructionsSection(content)) {
+    setPromptyButtonMode('remove');
+  } else {
+    setPromptyButtonMode('improve');
+  }
   if (buttonManuallyHidden) {
     return;
   }
