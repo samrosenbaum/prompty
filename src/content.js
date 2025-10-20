@@ -595,8 +595,12 @@ function buildImprovedPrompt(rawText) {
   const lines = [];
   lines.push('# Prompty Enhanced Prompt');
   lines.push('');
-  lines.push('## Ready-to-Send Prompt');
-  lines.push(`You are an experienced ${role}. Use the structure below to craft a thorough, outcome-focused response.`);
+  lines.push('## Prompt to Send to the Assistant');
+  lines.push('_Copy everything in this section into your conversation._');
+  lines.push('');
+  lines.push(
+    `You are an experienced ${role}. Use the structure below to craft a thorough, outcome-focused response.`
+  );
   lines.push('');
   lines.push('### Objective');
   lines.push(`- ${objective}`);
@@ -624,15 +628,24 @@ function buildImprovedPrompt(rawText) {
   lines.push('### Output Format');
   lines.push(...formatSection);
   lines.push('');
-  lines.push('## Clarifying Questions to Ask the Requester');
+  lines.push('### Response Checklist');
+  lines.push(...checklist.map((item) => `- ${formatBullet(item)}`));
+  lines.push('');
+  lines.push('## Actions for You (Do Not Send)');
+  lines.push('_Resolve the following items before sharing the prompt above._');
+  lines.push('');
+  lines.push('### Clarify These Details');
   if (clarifyingQuestions.length) {
     lines.push(...clarifyingQuestions.map((item) => `- ${formatBullet(item)}`));
   } else {
     lines.push('- No clarifying questions needed—the brief is already specific.');
   }
   lines.push('');
-  lines.push('## Response Checklist for the Assistant');
-  lines.push(...checklist.map((item) => `- ${formatBullet(item)}`));
+  lines.push('### Before You Send It');
+  lines.push(
+    '- Incorporate your answers above into the prompt section so the assistant has every detail.'
+  );
+  lines.push('- Remove this "Actions for You" section once everything is integrated.');
   lines.push('');
 
   const originalLines = rawText
