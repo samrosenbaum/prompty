@@ -541,145 +541,115 @@ function buildImprovedPrompt(rawText) {
     ? formatBullet(polishObjective(categories.objective))
     : 'Clarify the user\'s primary goal before proposing a solution.';
 
-  const contextItems = [...categories.context];
-  const contextSection = contextItems.length
-    ? contextItems.map((item) => `- ${formatBullet(item)}`)
-    : ['- No additional context provided. Confirm audience, tools, or environment as needed.'];
+  const contextSection = categories.context.length
+    ? categories.context.map((item) => `- ${formatBullet(item)}`)
+    : ['- Audience, use case, and existing assets were not provided. Confirm these details.'];
 
-  const constraintItems = categories.constraints.length
+  const constraintSection = categories.constraints.length
     ? categories.constraints.map((item) => `- ${formatBullet(item)}`)
-    : ['- Ask whether there are timeline, tone, formatting, or tooling constraints that must be respected.'];
+    : ['- Surface timeline, budget, technical limits, or brand rules that could affect the plan.'];
 
-  const deliverables = categories.outputs.length > 0
+  const deliverables = categories.outputs.length
     ? categories.outputs.map((item) => `- ${formatBullet(item)}`)
-    : ['- Break the outcome into concrete deliverables so the assistant can respond with precision.'];
+    : ['- Spell out the concrete deliverables you expect so the assistant can respond with precision.'];
 
-  const approachItems = categories.steps.length
+  const approachSection = categories.steps.length
     ? categories.steps.map((item) => `- ${formatBullet(item)}`)
-    : ['- Outline a clear plan or set of steps before presenting the final deliverable.'];
+    : ['- Outline a step-by-step approach that explains how you will tackle the work.'];
 
-  const styleToneItems = categories.styleTone.length
+  const styleToneSection = categories.styleTone.length
     ? categories.styleTone.map((item) => `- ${formatBullet(item)}`)
-    : ['- Define the desired tone, aesthetic, or voice so the response aligns with the brand or emotion you expect.'];
+    : ['- Describe the desired tone, aesthetic, or brand personality to guide the creative direction.'];
 
-  const formatItems = categories.format.length
+  const formatSection = categories.format.length
     ? categories.format.map((item) => `- ${formatBullet(item)}`)
-    : ['- Specify exactly how the output should be delivered (code block, table, checklist, artifact, etc.).'];
+    : ['- Specify the delivery format (mockups, copy deck, code block, etc.) so the output is usable immediately.'];
 
-  const specificGoalItems = [];
-  specificGoalItems.push(`- ${objective}`);
-  if (deliverables.length > 0) {
-    specificGoalItems.push(...deliverables);
+  const otherInsights = categories.other.length
+    ? categories.other.map((item) => `- ${formatBullet(item)}`)
+    : [];
+
+  const clarifyingQuestions = [];
+  if (categories.context.length === 0) {
+    clarifyingQuestions.push('Who is the primary audience or end user for this work?');
   }
-  if (categories.other.length > 0) {
-    specificGoalItems.push(
-      ...categories.other.map((item) => `- ${formatBullet(item)}`)
-    );
+  if (categories.constraints.length === 0) {
+    clarifyingQuestions.push('Are there timeline, budget, or technical constraints I must respect?');
   }
+  if (categories.styleTone.length === 0) {
+    clarifyingQuestions.push('What tone, aesthetic, or brand references should guide the output?');
+  }
+  if (categories.format.length === 0) {
+    clarifyingQuestions.push('How should the final answer be delivered so you can use it immediately?');
+  }
+
+  const clarityPrompts = claritySuggestions.map((item) => item.replace(/\.$/, ''));
+  clarifyingQuestions.push(...clarityPrompts);
 
   const checklist = [
     'Verify key assumptions and ask clarifying questions when requirements feel ambiguous or incomplete.',
-    'Explain how your response directly advances the stated mission and respects the constraints.',
+    'Explain how your response advances the objective while honoring every constraint and requirement.',
+    'Summarize the proposed plan before presenting the detailed deliverables.',
   ];
 
-  if (constraintItems.length === 1 && constraintItems[0].includes('Ask whether')) {
-    checklist.push('Surface any critical constraints (timeline, tone, length, dependencies) that should be confirmed.');
+  const lines = [];
+  lines.push('# Prompty Enhanced Prompt');
+  lines.push('');
+  lines.push('## Ready-to-Send Prompt');
+  lines.push(`You are an experienced ${role}. Use the structure below to craft a thorough, outcome-focused response.`);
+  lines.push('');
+  lines.push('### Objective');
+  lines.push(`- ${objective}`);
+  lines.push('');
+  lines.push('### Key Context');
+  lines.push(...contextSection);
+  lines.push('');
+  lines.push('### Constraints & Requirements');
+  lines.push(...constraintSection);
+  lines.push('');
+  lines.push('### Deliverables');
+  lines.push(...deliverables);
+  lines.push('');
+  if (otherInsights.length) {
+    lines.push('### Additional Notes');
+    lines.push(...otherInsights);
+    lines.push('');
   }
-
-  if (categories.steps.length === 0) {
-    checklist.push('Share a recommended plan of attack before diving into detailed deliverables.');
+  lines.push('### Suggested Approach');
+  lines.push(...approachSection);
+  lines.push('');
+  lines.push('### Style & Tone');
+  lines.push(...styleToneSection);
+  lines.push('');
+  lines.push('### Output Format');
+  lines.push(...formatSection);
+  lines.push('');
+  lines.push('## Clarifying Questions to Ask the Requester');
+  if (clarifyingQuestions.length) {
+    lines.push(...clarifyingQuestions.map((item) => `- ${formatBullet(item)}`));
+  } else {
+    lines.push('- No clarifying questions needed—the brief is already specific.');
   }
+  lines.push('');
+  lines.push('## Response Checklist for the Assistant');
+  lines.push(...checklist.map((item) => `- ${formatBullet(item)}`));
+  lines.push('');
 
-  const sections = [];
-  sections.push(`You are an experienced ${role}. Carefully study the request and craft a thorough, outcome-focused response.`);
-  sections.push('');
-  sections.push('## Prompt Expansion Blueprint');
-  sections.push('### 1. Role & Context');
-  sections.push(`- Expert focus: ${formatBullet(`Operate as a ${role}.`)}`);
-  sections.push(...contextSection);
-  sections.push('');
-  sections.push('### 2. Specific Goals & Success Criteria');
-  sections.push(...specificGoalItems);
-  sections.push('');
-  sections.push('### 3. Constraints & Requirements');
-  sections.push(...constraintItems);
-  sections.push('');
-  sections.push('### 4. Style, Tone, & Aesthetic');
-  sections.push(...styleToneItems);
-  sections.push('');
-  sections.push('### 5. Output Format & Delivery');
-  sections.push(...formatItems);
-  sections.push('');
-  sections.push('## Suggested Approach');
-  sections.push(...approachItems);
-  sections.push('');
-  sections.push('## Communication Guardrails');
-  sections.push(...checklist.map((item) => `- ${formatBullet(item)}`));
-  sections.push('');
-  sections.push('## Quick Checklist Before You Submit');
-  sections.push('- Is the intent and mission stated clearly and unambiguously?');
-  sections.push('- Are quantities, counts, and success metrics explicit?');
-  sections.push('- Did you describe the preferred format, tone, and style?');
-  sections.push('- Are all constraints, limitations, and tools surfaced?');
-  sections.push('- Would a teammate interpret the request exactly as you do?');
-  sections.push('- Did you reference examples or comparisons when helpful?');
-  sections.push('');
-  sections.push('## Prompt-Crafting Power Tips');
-  sections.push('- Replace vague adjectives with specific references to visuals or behavior.');
-  sections.push('- Quantify expectations wherever possible (counts, time frames, metrics).');
-  sections.push('- Provide examples or inspirations (e.g., “like Stripe’s homepage”).');
-  sections.push('- Break complex work into ordered steps so the assistant can follow along.');
-  sections.push('- Call out anything you do **not** want included in the final answer.');
-  sections.push('- Invite the assistant to share reasoning or design choices as it works.');
-  sections.push('');
-  sections.push('## Clarity Boost Suggestions for the Requester');
-  sections.push(
-    ...claritySuggestions.map((item) => `- ${formatBullet(item)}`)
-  );
-  sections.push('');
-  sections.push('## When Responding');
-  sections.push('- Start with a succinct status summary that proves you understand the mission.');
-  sections.push('- Provide the deliverables in a clear structure (headings, bullet lists, tables, or code blocks).');
-  sections.push('- Close with optional follow-up questions or suggestions to improve the outcome.');
-  sections.push('');
-  sections.push('## Prompt Template You Can Reuse');
-  sections.push('```');
-  sections.push('Act as a [expertise] who specializes in [domain].');
-  sections.push('I am [your situation]. I need [general goal] because [reason].');
-  sections.push('The solution must include:');
-  sections.push('- [Feature 1 with details]');
-  sections.push('- [Feature 2 with details]');
-  sections.push('- [Feature 3 with details]');
-  sections.push('Constraints:');
-  sections.push('- Technology: [specific tools/languages]');
-  sections.push('- Limitations: [what to avoid or stay within]');
-  sections.push('- Compatibility: [platforms/browsers/devices]');
-  sections.push('Style & Tone: [specific adjectives or inspirations]');
-  sections.push('Output: Deliver as [format] with [level of detail].');
-  sections.push('```');
-  sections.push('');
-  sections.push('## How LLMs Process This Prompt');
-  sections.push('- Clear intent: spell out what success looks like.');
-  sections.push('- Constraints: list boundaries, tools, or red lines.');
-  sections.push('- Context: share background that shapes the answer.');
-  sections.push('- Structure: keep information organized by topic.');
-  sections.push('- Specificity: use concrete details instead of generalities.');
-  sections.push('');
   const originalLines = rawText
     .trim()
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
 
-  sections.push('---');
-  sections.push('### Original Request');
+  lines.push('---');
+  lines.push('### Original Request');
   if (originalLines.length === 0) {
-    sections.push('> (no original text captured)');
+    lines.push('> (no original text captured)');
   } else {
-    sections.push(originalLines.map((line) => `> ${line}`).join('\n'));
+    lines.push(originalLines.map((line) => `> ${line}`).join('\n'));
   }
 
-  return sections.join('\n');
+  return lines.join('\n');
 }
 
 document.addEventListener('mousemove', handleButtonMouseMove, true);
